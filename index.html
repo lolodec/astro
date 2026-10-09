@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Astro Guidage - Flèches</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: black; font-family: sans-serif;
+        }
+
+        #videoFlux {
+            position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%;
+            width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover;
+        }
+
+        #interface {
+            position: relative; z-index: 2; pointer-events: none;
+            color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px;
+        }
+
+        button {
+            pointer-events: auto; padding: 12px 24px; background-color: #222;
+            color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px;
+        }
+
+        #mireCentrale {
+            position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
+            border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
+        }
+
+        /* Styles des flèches de guidage */
+        .fleche {
+            position: absolute; z-index: 4; font-size: 40px; color: rgba(255, 255, 255, 0.2);
+            transition: color 0.1s, transform 0.1s; text-shadow: 0 0 10px black;
+        }
+        .active { color: #ffff00; transform: scale(1.2); } /* Jaune vif quand il faut bouger */
+
+        #flecheHaut  { top: 35%; left: 50%; transform: translateX(-50%); }
+        #flecheBas   { bottom: 35%; left: 50%; transform: translateX(-50%); }
+        #flecheGauche{ top: 50%; left: 35%; transform: translateY(-50%); }
+        #flecheDroite{ top: 50%; right: 35%; transform: translateY(-50%); }
+    </style>
+</head>
+<body>
+
+    <video id="videoFlux" autoplay playsinline muted></video>
+
+    <div id="interface">
+        <h2>Guidage Astro Actif</h2>
+        <button id="btnDemarrer">1. Activer l'application</button>
+        <div id="telemetrie">En attente des capteurs et du GPS...</div>
+    </div>
+
+    <!-- Mire fixe au centre -->
+    <div id="mireCentrale"></div>
+
+    <!-- Flèches de guidage visuel -->
+    <div id="flecheHaut" class="fleche">▲</div>
+    <div id="flecheBas" class="fleche">▼</div>
+    <div id="flecheGauche" class="fleche">◀</div>
+    <div id="flecheDroite" class="fleche">▶</div>
+
+    <script>
+        // --- COORDONNÉES DE L'ÉTOILE CIBLE (Exemple : Véga) ---
+        const ETOILE_RA = 279.23;  // Ascension Droite en degrés
+        const ETOILE_DEC = 38.78;  // Déclinaison en degrés
+
+        // Variables globales de position
+        let gpsLat = 0, gpsLon = 0, gpsOk = false;
+        let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false;
+
+        // Éléments du DOM
+        const btnDemarrer = document.getElementById('btnDemarrer');
+        const telemetrie = document.getElementById('telemetrie');
+        const fHaut = document.getElementById('flecheHaut');
+        const fBas = document.getElementById('flecheBas');
+        const fGauche = document.getElementById('flecheGauche');
+        const fDroite = document.getElementById('flecheDroite');
+
+        // --- INITIALISATION AU CLIC ---
+        btnDemarrer.addEventListener('click', async () => {
+            btnDemarrer.style.display = 'none';
+            await demarrerCamera();
+            demarrerGPS();
+            await demarrerCapteurs();
+            // Lancement de la boucle principale de calcul
+            requestAnimationFrame(bouclePrincipale);
+        });
+
+        // --- MATÉRIEL : CAMÉRA ---
+        async function demarrerCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" }, width: 1280, height: 720 },
+                    audio: false
+                });
+                document.getElementById('videoFlux').srcObject = stream;
+            } catch (e) {
+                telemetrie.innerHTML = "Erreur caméra arrière. Mode simulé.";
+            }
+        }
+
+        // --- MATÉRIEL : GPS ---
+        function demarrerGPS() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition((pos) => {
+                    gpsLat = pos.coords.latitude;
+                    gpsLon = pos.coords.longitude;
+                    gpsOk = true;
+                }, null, { enableHighAccuracy: true });
+            }
+        }
+
+        // --- MATÉRIEL : CAPTEURS (IPHONE iOS) ---
+        async function demarrerCapteurs() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                const perm = await DeviceOrientationEvent.requestPermission();
+                if (perm === 'granted') {
+                    window.addEventListener('deviceorientation', ecouterOrientation);
+                }
+            } else {
+                window.addEventListener('deviceorientation', ecouterOrientation);
+            }
+        }
+
+        function ecouterOrientation(e) {
+            // L'iPhone donne la boussole dans e.webkitCompassHeading s'il est disponible
+            iphoneAzimut = e.webkitCompassHeading || (360 - e.alpha);
+            iphoneHauteur = e.beta; // Inclinaison avant/arrière
+            capteursOk = true;
+        }
+
+        // --- MATHS : CONVERSION ASTRONOMIQUE ---
+        function calculerPositionEtoile(lat, lon, ra, dec) {
+            const maintenant = new Date();
+            const julianDate = (maintenant.getTime() / 86400000) + 2440587.5;
+            const D = julianDate - 2451545.0;
+
+            let tsg = (280.46061837 + 360.98564736629 * D) % 360;
+            let tsl = (tsg + lon + 360) % 360;
+            let H = (tsl - ra + 360) % 360;
+
+            const rLat = (lat * Math.PI) / 180;
+            const rDec = (dec * Math.PI) / 180;
+            const rH = (H * Math.PI) / 180;
+
+            const sinH = Math.sin(rDec) * Math.sin(rLat) + Math.cos(rDec) * Math.cos(rLat) * Math.cos(rH);
+            const hauteur = Math.asin(sinH) * 180 / Math.PI;
+
+            const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
+            let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
+            if (Math.sin(rH) > 0) azimut = 360 - azimut;
+
+            return { hauteur, azimut };
+        }
+
+        // --- BOUCLE DE COMPARAISON ET GUIDAGE ---
+        function bouclePrincipale() {
+            if (gpsOk && capteursOk) {
+                // 1. Calcul de la position de l'étoile à la milliseconde près
+                const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+
+                // 2. Calcul des écarts de trajectoire
+                let deltaHauteur = etoile.hauteur - iphoneHauteur;
+                let deltaAzimut = etoile.azimut - iphoneAzimut;
+
+                // Correction mathématique pour le passage du Cap Nord (360° -> 0°)
+                if (deltaAzimut > 180) deltaAzimut -= 360;
+                if (deltaAzimut < -180) deltaAzimut += 360;
+
+                // Affichage des données brutes à l'écran
+                telemetrie.innerHTML = `
+                    <b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
+                    <b>iPhone :</b> Az ${iphoneAzimut.toFixed(1)}° | Ht ${iphoneHauteur.toFixed(1)}°
+                `;
+
+                // 3. SEUILS DE TOLÉRANCE (en degrés)
+                const TOLERANCE = 0.2; 
+
+                // Gestion de l'axe vertical (Hauteur)
+                if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
+                else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
+                else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
+
+                // Gestion de l'axe horizontal (Azimut)
+                if (deltaAzimut > TOLERANCE) { fDroite.classList.add('active'); fGauche.classList.remove('active'); }
+                else if (deltaAzimut < -TOLERANCE) { fGauche.classList.add('active'); fDroite.classList.remove('active'); }
+                else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
+            }
+
+            // Relancer la boucle au prochain rafraîchissement d'écran
+            requestAnimationFrame(bouclePrincipale);
+        }
+    </script>
+</body>
+</html>
