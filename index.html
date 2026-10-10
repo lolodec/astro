@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Astro Guidage - Flèches CSS</title>
+    <title>Astro Guidage Pro</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: black; font-family: sans-serif; }
         #videoFlux { position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover; }
@@ -41,6 +41,7 @@
     <div id="flecheDroite" class="container-fleche"></div>
 
     <script>
+        // Coordonnées de Véga
         const ETOILE_RA = 279.23; const ETOILE_DEC = 38.78;  
         let gpsLat = 0, gpsLon = 0, gpsOk = false, iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
@@ -70,9 +71,10 @@
         btnEtalonner.addEventListener('click', function() {
             if (gpsOk && capteursOk) {
                 const pos = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+                // On fige l'écart angulaire au moment précis de la validation manuelle
                 offsetAzimut = pos.azimut - iphoneAzimut;
                 offsetHauteur = pos.hauteur - iphoneHauteur;
-                telemetrie.innerHTML = "Étalonnage réussi !";
+                telemetrie.innerHTML = "Étalonnage mémorisé !";
             }
         });
 
@@ -85,45 +87,73 @@
 
         function demarrerGPS() {
             if (navigator.geolocation) {
-                navigator.geolocation.watchPosition((pos) => { gpsLat = pos.coords.latitude; gpsLon = pos.coords.longitude; gpsOk = true; }, null, { enableHighAccuracy: true });
+                navigator.geolocation.watchPosition((pos) => { 
+                    gpsLat = pos.coords.latitude; 
+                    gpsLon = pos.coords.longitude; 
+                    gpsOk = true; 
+                }, null, { enableHighAccuracy: true });
             }
         }
 
         function ecouterOrientation(e) {
+            // Lecture robuste du cap iOS
             iphoneAzimut = (e.webkitCompassHeading !== undefined) ? e.webkitCompassHeading : (360 - e.alpha) % 360;
-            iphoneHauteur = (Math.abs(e.beta) > 45) ? (90 - Math.abs(e.beta)) : Math.abs(e.gamma);
+            
+            // Correction géométrique caméra arrière iPhone 13 pointée vers le haut
+            iphoneHauteur = e.beta - 90;
+            
             capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
-            const maintenant = new Date();
-            const julianDate = (maintenant.getTime() / 86400000) + 2440587.5;
-            const D = julianDate - 2451545.0;
-            let tsg = (280.46061837 + 360.98564736629 * D) % 360;
+            const m = new Date();
+            // CORRECTION CRITIQUE : Calcul basé strictement sur le temps universel coordonné (UTC)
+            const UTC_heures = m.getUTCHours() + m.getUTCMinutes()/60 + m.getUTCSeconds()/3600;
+            
+            // Calcul du jour Julien simplifié
+            const annee = m.getUTCFullYear();
+            const mois = m.getUTCMonth() + 1;
+            const jour = m.getUTCDate();
+            
+            let A = Math.floor(annee / 100);
+            let B = 2 - A + Math.floor(A / 4);
+            let jd = Math.floor(365.25 * (annee + 4716)) + Math.floor(30.6001 * (mois + 1)) + jour + B - 1524.5 + (UTC_heures/24);
+            const D = jd - 2451545.0;
+
+            // Calcul précis de la rotation terrestre (Temps Sidéral Local)
+            let tsg = (100.46061837 + 360.98564736629 * D) % 360;
             let tsl = (tsg + lon + 360) % 360;
             let H = (tsl - ra + 360) % 360;
+
             const rLat = (lat * Math.PI) / 180, rDec = (dec * Math.PI) / 180, rH = (H * Math.PI) / 180;
             const sinH = Math.sin(rDec) * Math.sin(rLat) + Math.cos(rDec) * Math.cos(rLat) * Math.cos(rH);
             const hauteur = Math.asin(sinH) * 180 / Math.PI;
+            
             const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
             let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
             if (Math.sin(rH) > 0) azimut = 360 - azimut;
+            
             return { hauteur, azimut };
         }
 
         function bouclePrincipale() {
             if (!gpsOk || !capteursOk) {
-                telemetrie.innerHTML = `Recherche... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
+                telemetrie.innerHTML = `Signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
                 requestAnimationFrame(bouclePrincipale); return;
             }
             const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-            let azAjuste = (iphoneAzimut + offsetAzimut + 360) % 360, htAjustee = iphoneHauteur + offsetHauteur;
-            let dHt = etoile.hauteur - htAjustee, dAz = etoile.azimut - azAjuste;
+            
+            // Correction dynamique avec les valeurs étalonnées
+            let azAjuste = (iphoneAzimut + offsetAzimut + 360) % 360;
+            let htAjustee = iphoneHauteur + offsetHauteur;
+
+            let dHt = etoile.hauteur - htAjustee;
+            let dAz = etoile.azimut - azAjuste;
             if (dAz > 180) dAz -= 360; if (dAz < -180) dAz += 360;
 
-            telemetrie.innerHTML = `<b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br><b>iPhone :</b> Az ${azAjuste.toFixed(1)}° | Ht ${htAjustee.toFixed(1)}°`;
+            telemetrie.innerHTML = `<b>Cible :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br><b>iPhone :</b> Az ${azAjuste.toFixed(1)}° | Ht ${htAjustee.toFixed(1)}°`;
             
-            const TOL = 0.4;
+            const TOL = 0.5;
             if (dHt > TOL) { fHaut.classList.add('active'); fBas.classList.remove('active'); } else if (dHt < -TOL) { fBas.classList.add('active'); fHaut.classList.remove('active'); } else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
             if (dAz > TOL) { fDroite.classList.add('active'); fGauche.classList.remove('active'); } else if (dAz < -TOL) { fGauche.classList.add('active'); fDroite.classList.remove('active'); } else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
             
