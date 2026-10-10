@@ -21,6 +21,9 @@
             pointer-events: auto; padding: 12px 24px; background-color: #222;
             color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px;
         }
+        #btnEtalonner {
+            background-color: #800000; color: #ffcccc; border-color: #ff0000;
+        }
         #mireCentrale {
             position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
             border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
@@ -43,6 +46,7 @@
     <div id="interface">
         <h2>Guidage Astro Clara</h2>
         <button id="btnDemarrer">1. Activer l'application</button>
+        <button id="btnEtalonner" style="display:none;">2. Centrer sur Véga & Étalonner</button>
         <div id="telemetrie">En attente de l'activation...</div>
     </div>
 
@@ -54,22 +58,28 @@
     <div id="flecheDroite" class="fleche">▶</div>
 
     <script>
+        // Coordonnées cibles (Véga)
         const ETOILE_RA = 279.23;  
         const ETOILE_DEC = 38.78;  
 
         let gpsLat = 0, gpsLon = 0, gpsOk = false;
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false;
+        
+        // Variables d'ajustement pour l'étalonnage manuel
+        let offsetAzimut = 0;
+        let offsetHauteur = 0;
 
         const btnDemarrer = document.getElementById('btnDemarrer');
+        const btnEtalonner = document.getElementById('btnEtalonner');
         const telemetrie = document.getElementById('telemetrie');
         const fHaut = document.getElementById('flecheHaut');
         const fBas = document.getElementById('flecheBas');
         const fGauche = document.getElementById('flecheGauche');
         const fDroite = document.getElementById('flecheDroite');
 
-        // REGLE D'OR APPLE : On demande l'autorisation des capteurs en TOUTE PRIORITÉ dès le clic !
         btnDemarrer.addEventListener('click', function() {
             btnDemarrer.style.display = 'none';
+            btnEtalonner.style.display = 'inline-block';
             telemetrie.innerHTML = "Démarrage des modules...";
 
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -78,24 +88,35 @@
                         if (perm === 'granted') {
                             window.addEventListener('deviceorientation', ecouterOrientation, true);
                             capteursOk = true;
-                            // Les capteurs sont validés, on peut lancer sereinement le reste
                             demarrerCamera();
                             demarrerGPS();
                             requestAnimationFrame(bouclePrincipale);
                         } else {
-                            telemetrie.innerHTML = "Permission capteurs refusée par l'iPhone.";
+                            telemetrie.innerHTML = "Permission capteurs refusée.";
                         }
                     })
                     .catch(err => {
-                        telemetrie.innerHTML = "Erreur d'initialisation : " + err;
+                        telemetrie.innerHTML = "Erreur : " + err;
                     });
             } else {
-                // Fallback hors iPhone
                 window.addEventListener('deviceorientation', ecouterOrientation, true);
                 capteursOk = true;
                 demarrerCamera();
                 demarrerGPS();
                 requestAnimationFrame(bouclePrincipale);
+            }
+        });
+
+        // BOUTON COMPENSATION : Si vous avez Véga dans votre objectif mais que l'iPhone dit le contraire
+        btnEtalonner.addEventListener('click', function() {
+            if (gpsOk && capteursOk) {
+                const positionTheorique = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+                
+                // On calcule l'écart entre le ciel réel et les capteurs déréglés
+                offsetAzimut = positionTheorique.azimut - iphoneAzimut;
+                offsetHauteur = positionTheorique.hauteur - iphoneHauteur;
+                
+                telemetrie.innerHTML = "Étalonnage réussi !";
             }
         });
 
@@ -107,7 +128,7 @@
                 });
                 document.getElementById('videoFlux').srcObject = stream;
             } catch (e) {
-                console.log("Caméra arrière indisponible.");
+                console.log("Caméra en mode simulation.");
             }
         }
 
@@ -117,26 +138,31 @@
                     gpsLat = pos.coords.latitude;
                     gpsLon = pos.coords.longitude;
                     gpsOk = true;
-                }, (err) => {
-                    telemetrie.innerHTML = "Erreur GPS : " + err.message;
-                }, { enableHighAccuracy: true });
+                }, null, { enableHighAccuracy: true });
             }
         }
 
-       function ecouterOrientation(e) {
-    if (e.webkitCompassHeading !== undefined) {
-        iphoneAzimut = e.webkitCompassHeading;
-    } else {
-        iphoneAzimut = (360 - e.alpha) % 360;
-    }
-    
-    // CORRECTION : On adapte la lecture de la hauteur (beta) 
-    // pour compenser le fait que vous tenez le téléphone verticalement face au ciel.
-    iphoneHauteur = 90 - e.beta; 
-    
-    capteursOk = true;
-}
+        function ecouterOrientation(e) {
+            // Lecture du cap (Azimut)
+            if (e.webkitCompassHeading !== undefined) {
+                iphoneAzimut = e.webkitCompassHeading;
+            } else {
+                iphoneAzimut = (360 - e.alpha) % 360;
+            }
 
+            // REPERE CAMERA ARRIERE IPHONE : 
+            // Quand on pointe la caméra arrière grand-angle vers le ciel, l'axe 'gamma' (inclinaison latérale)
+            // se transforme géométriquement en indicateur de hauteur sous iOS.
+            if (Math.abs(e.beta) > 45) {
+                // Si l'iPhone est tenu verticalement ou incliné face au ciel
+                iphoneHauteur = 90 - Math.abs(e.beta);
+            } else {
+                // Si l'iPhone est plus à plat
+                iphoneHauteur = Math.abs(e.gamma);
+            }
+            
+            capteursOk = true;
+        }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
             const maintenant = new Date();
@@ -163,25 +189,29 @@
 
         function bouclePrincipale() {
             if (!gpsOk || !capteursOk) {
-                telemetrie.innerHTML = `Recherche des signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
+                telemetrie.innerHTML = `Signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
                 requestAnimationFrame(bouclePrincipale);
                 return;
             }
 
             const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
 
-            let deltaHauteur = etoile.hauteur - iphoneHauteur;
-            let deltaAzimut = etoile.azimut - iphoneAzimut;
+            // Application des filtres d'étalonnage
+            let azimutAjuste = (iphoneAzimut + offsetAzimut + 360) % 360;
+            let hauteurAjustee = iphoneHauteur + offsetHauteur;
+
+            let deltaHauteur = etoile.hauteur - hauteurAjustee;
+            let deltaAzimut = etoile.azimut - azimutAjuste;
 
             if (deltaAzimut > 180) deltaAzimut -= 360;
             if (deltaAzimut < -180) deltaAzimut += 360;
 
             telemetrie.innerHTML = `
-                <b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
-                <b>iPhone :</b> Az ${iphoneAzimut.toFixed(1)}° | Ht ${iphoneHauteur.toFixed(1)}°
+                <b>Étoile (Théorique) :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
+                <b>iPhone (Ajusté) :</b> Az ${azimutAjuste.toFixed(1)}° | Ht ${hauteurAjustee.toFixed(1)}°
             `;
 
-            const TOLERANCE = 0.2; 
+            const TOLERANCE = 0.3; 
 
             if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
             else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
@@ -194,5 +224,3 @@
             requestAnimationFrame(bouclePrincipale);
         }
     </script>
-</body>
-</html>
