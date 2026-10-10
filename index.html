@@ -29,39 +29,35 @@
             border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
         }
 
-        /* --- NOUVELLES FLÈCHES DESSINÉES EN CSS PUR (SANS ÉMOJIS) --- */
+        /* --- FLÈCHES DESSINÉES EN CSS PUR (SANS ÉMOJIS) --- */
         .container-fleche {
             position: absolute;
             z-index: 4;
             width: 0;
             height: 0;
             border-style: solid;
-            opacity: 0.15; /* Reste très discret au repos */
+            opacity: 0.15;
             transition: opacity 0.1s, transform 0.1s;
         }
         
-        /* Flèche Haut */
         #flecheHaut {
             top: 30%; left: 50%;
             transform: translateX(-50%);
             border-width: 0 20px 30px 20px;
             border-color: transparent transparent #ffffff transparent;
         }
-        /* Flèche Bas */
         #flecheBas {
             bottom: 30%; left: 50%;
             transform: translateX(-50%);
             border-width: 30px 20px 0 20px;
             border-color: #ffffff transparent transparent transparent;
         }
-        /* Flèche Gauche */
         #flecheGauche {
             top: 50%; left: 30%;
             transform: translateY(-50%);
             border-width: 20px 30px 20px 0;
             border-color: transparent #ffffff transparent transparent;
         }
-        /* Flèche Droite */
         #flecheDroite {
             top: 50%; right: 30%;
             transform: translateY(-50%);
@@ -69,15 +65,11 @@
             border-color: transparent transparent transparent #ffffff;
         }
 
-        /* Style quand la flèche s'active (passe en jaune vif) */
-        .active {
-            opacity: 1 !important;
-            transform: scale(1.2);
-        }
-        #flecheHaut.active { border-bottom-color: #ffff00 !important; transform: translateX(-50%) scale(1.2); }
-        #flecheBas.active { border-top-color: #ffff00 !important; transform: translateX(-50%) scale(1.2); }
-        #flecheGauche.active { border-right-color: #ffff00 !important; transform: translateY(-50%) scale(1.2); }
-        #flecheDroite.active { border-left-color: #ffff00 !important; transform: translateY(-50%) scale(1.2); }
+        /* Style quand la flèche passe au jaune vif */
+        #flecheHaut.active { border-bottom-color: #ffff00 !important; opacity: 1 !important; transform: translateX(-50%) scale(1.2); }
+        #flecheBas.active { border-top-color: #ffff00 !important; opacity: 1 !important; transform: translateX(-50%) scale(1.2); }
+        #flecheGauche.active { border-right-color: #ffff00 !important; opacity: 1 !important; transform: translateY(-50%) scale(1.2); }
+        #flecheDroite.active { border-left-color: #ffff00 !important; opacity: 1 !important; transform: translateY(-50%) scale(1.2); }
     </style>
 </head>
 <body>
@@ -93,7 +85,6 @@
 
     <div id="mireCentrale"></div>
 
-    <!-- Divs vides qui servent de triangles graphiques -->
     <div id="flecheHaut" class="container-fleche"></div>
     <div id="flecheBas" class="container-fleche"></div>
     <div id="flecheGauche" class="container-fleche"></div>
@@ -239,3 +230,7 @@
                 <b>iPhone (Ajusté) :</b> Az ${azimutAjuste.toFixed(1)}° | Ht ${hauteurAjustee.toFixed(1)}°
             `;
 
+            const TOLERANCE = 0.4; 
+
+            if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
+            else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
