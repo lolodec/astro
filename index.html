@@ -30,12 +30,11 @@
             border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
         }
 
-        /* Styles des flèches de guidage */
         .fleche {
             position: absolute; z-index: 4; font-size: 40px; color: rgba(255, 255, 255, 0.2);
             transition: color 0.1s, transform 0.1s; text-shadow: 0 0 10px black;
         }
-        .active { color: #ffff00; transform: scale(1.2); } /* Jaune vif quand il faut bouger */
+        .active { color: #ffff00; transform: scale(1.2); }
 
         #flecheHaut  { top: 35%; left: 50%; transform: translateX(-50%); }
         #flecheBas   { bottom: 35%; left: 50%; transform: translateX(-50%); }
@@ -48,30 +47,25 @@
     <video id="videoFlux" autoplay playsinline muted></video>
 
     <div id="interface">
-        <h2>Guidage Astro Clara </h2>
+        <h2>Guidage Astro Clara</h2>
         <button id="btnDemarrer">1. Activer l'application</button>
-        <div id="telemetrie">En attente des capteurs et du GPS...</div>
+        <div id="telemetrie">En attente de l'activation...</div>
     </div>
 
-    <!-- Mire fixe au centre -->
     <div id="mireCentrale"></div>
 
-    <!-- Flèches de guidage visuel -->
     <div id="flecheHaut" class="fleche">▲</div>
     <div id="flecheBas" class="fleche">▼</div>
     <div id="flecheGauche" class="fleche">◀</div>
     <div id="flecheDroite" class="fleche">▶</div>
 
     <script>
-        // --- COORDONNÉES DE L'ÉTOILE CIBLE (Exemple : Véga) ---
-        const ETOILE_RA = 279.23;  // Ascension Droite en degrés
-        const ETOILE_DEC = 38.78;  // Déclinaison en degrés
+        const ETOILE_RA = 279.23;  
+        const ETOILE_DEC = 38.78;  
 
-        // Variables globales de position
         let gpsLat = 0, gpsLon = 0, gpsOk = false;
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false;
 
-        // Éléments du DOM
         const btnDemarrer = document.getElementById('btnDemarrer');
         const telemetrie = document.getElementById('telemetrie');
         const fHaut = document.getElementById('flecheHaut');
@@ -79,17 +73,17 @@
         const fGauche = document.getElementById('flecheGauche');
         const fDroite = document.getElementById('flecheDroite');
 
-        // --- INITIALISATION AU CLIC ---
         btnDemarrer.addEventListener('click', async () => {
             btnDemarrer.style.display = 'none';
+            telemetrie.innerHTML = "Démarrage des modules...";
+            
             await demarrerCamera();
             demarrerGPS();
-            await demarrerCapteurs();
-            // Lancement de la boucle principale de calcul
+            demarrerCapteurs(); // Correction : Retrait du await qui bloquait le script ici
+            
             requestAnimationFrame(bouclePrincipale);
         });
 
-        // --- MATÉRIEL : CAMÉRA ---
         async function demarrerCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -98,41 +92,54 @@
                 });
                 document.getElementById('videoFlux').srcObject = stream;
             } catch (e) {
-                telemetrie.innerHTML = "Erreur caméra arrière. Mode simulé.";
+                telemetrie.innerHTML = "Caméra arrière indisponible. Mode simulation vidéo.";
             }
         }
 
-        // --- MATÉRIEL : GPS ---
         function demarrerGPS() {
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition((pos) => {
                     gpsLat = pos.coords.latitude;
                     gpsLon = pos.coords.longitude;
                     gpsOk = true;
-                }, null, { enableHighAccuracy: true });
+                }, (err) => {
+                    telemetrie.innerHTML = `Erreur GPS : ${err.message}. Vérifiez vos réglages Réglages > Confidentialité.`;
+                }, { enableHighAccuracy: true });
+            } else {
+                telemetrie.innerHTML = "Le GPS n'est pas supporté par ce navigateur.";
             }
         }
 
-        // --- MATÉRIEL : CAPTEURS (IPHONE iOS) ---
-        async function demarrerCapteurs() {
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                const perm = await DeviceOrientationEvent.requestPermission();
-                if (perm === 'granted') {
-                    window.addEventListener('deviceorientation', ecouterOrientation);
-                }
+        function demarrerCapteurs() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(perm => {
+                        if (perm === 'granted') {
+                            window.addEventListener('deviceorientation', ecouterOrientation);
+                        } else {
+                            telemetrie.innerHTML = "Permission capteurs refusée par l'utilisateur.";
+                        }
+                    })
+                    .catch(err => {
+                        telemetrie.innerHTML = "Erreur d'initialisation des capteurs : " + err;
+                    });
             } else {
+                // Pour les navigateurs de bureau ou Android
                 window.addEventListener('deviceorientation', ecouterOrientation);
             }
         }
 
         function ecouterOrientation(e) {
-            // L'iPhone donne la boussole dans e.webkitCompassHeading s'il est disponible
-            iphoneAzimut = e.webkitCompassHeading || (360 - e.alpha);
-            iphoneHauteur = e.beta; // Inclinaison avant/arrière
+            // Utilisation de la boussole native Apple en priorité
+            if (e.webkitCompassHeading !== undefined) {
+                iphoneAzimut = e.webkitCompassHeading;
+            } else {
+                iphoneAzimut = (360 - e.alpha) % 360;
+            }
+            iphoneHauteur = e.beta; 
             capteursOk = true;
         }
 
-        // --- MATHS : CONVERSION ASTRONOMIQUE ---
         function calculerPositionEtoile(lat, lon, ra, dec) {
             const maintenant = new Date();
             const julianDate = (maintenant.getTime() / 86400000) + 2440587.5;
@@ -156,43 +163,42 @@
             return { hauteur, azimut };
         }
 
-        // --- BOUCLE DE COMPARAISON ET GUIDAGE ---
         function bouclePrincipale() {
-            if (gpsOk && capteursOk) {
-                // 1. Calcul de la position de l'étoile à la milliseconde près
-                const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-
-                // 2. Calcul des écarts de trajectoire
-                let deltaHauteur = etoile.hauteur - iphoneHauteur;
-                let deltaAzimut = etoile.azimut - iphoneAzimut;
-
-                // Correction mathématique pour le passage du Cap Nord (360° -> 0°)
-                if (deltaAzimut > 180) deltaAzimut -= 360;
-                if (deltaAzimut < -180) deltaAzimut += 360;
-
-                // Affichage des données brutes à l'écran
-                telemetrie.innerHTML = `
-                    <b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
-                    <b>iPhone :</b> Az ${iphoneAzimut.toFixed(1)}° | Ht ${iphoneHauteur.toFixed(1)}°
-                `;
-
-                // 3. SEUILS DE TOLÉRANCE (en degrés)
-                const TOLERANCE = 0.2; 
-
-                // Gestion de l'axe vertical (Hauteur)
-                if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
-                else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
-                else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
-
-                // Gestion de l'axe horizontal (Azimut)
-                if (deltaAzimut > TOLERANCE) { fDroite.classList.add('active'); fGauche.classList.remove('active'); }
-                else if (deltaAzimut < -TOLERANCE) { fGauche.classList.add('active'); fDroite.classList.remove('active'); }
-                else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
+            // Affichage de l'état d'attente précis si les capteurs tardent à répondre
+            if (!gpsOk || !capteursOk) {
+                telemetrie.innerHTML = `Recherche des signaux... <br> GPS : ${gpsOk ? 'OK' : 'En attente'} | Capteurs : ${capteursOk ? 'OK' : 'En attente'}`;
+                requestAnimationFrame(bouclePrincipale);
+                return;
             }
 
-            // Relancer la boucle au prochain rafraîchissement d'écran
+            const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+
+            let deltaHauteur = etoile.hauteur - iphoneHauteur;
+            let deltaAzimut = etoile.azimut - iphoneAzimut;
+
+            if (deltaAzimut > 180) deltaAzimut -= 360;
+            if (deltaAzimut < -180) deltaAzimut += 360;
+
+            telemetrie.innerHTML = `
+                <b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
+                <b>iPhone :</b> Az ${iphoneAzimut.toFixed(1)}° | Ht ${iphoneHauteur.toFixed(1)}°
+            `;
+
+            const TOLERANCE = 0.2; 
+
+            // Guidage Vertical
+            if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
+            else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
+            else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
+
+            // Guidage Horizontal (Correction de l'accolade manquante)
+            if (deltaAzimut > TOLERANCE) { fDroite.classList.add('active'); fGauche.classList.remove('active'); }
+            else if (deltaAzimut < -TOLERANCE) { fGauche.classList.add('active'); fDroite.classList.remove('active'); }
+            else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
+
             requestAnimationFrame(bouclePrincipale);
         }
     </script>
 </body>
 </html>
+
