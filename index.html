@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Astro Guidage - Flèches</title>
+    <title>Astro Guidage - Flèches CSS</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -28,15 +28,56 @@
             position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
             border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
         }
-        .fleche {
-            position: absolute; z-index: 4; font-size: 40px; color: rgba(255, 255, 255, 0.2);
-            transition: color 0.1s, transform 0.1s; text-shadow: 0 0 10px black;
+
+        /* --- NOUVELLES FLÈCHES DESSINÉES EN CSS PUR (SANS ÉMOJIS) --- */
+        .container-fleche {
+            position: absolute;
+            z-index: 4;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            opacity: 0.15; /* Reste très discret au repos */
+            transition: opacity 0.1s, transform 0.1s;
         }
-        .active { color: #ffff00; transform: scale(1.2); }
-        #flecheHaut  { top: 35%; left: 50%; transform: translateX(-50%); }
-        #flecheBas   { bottom: 35%; left: 50%; transform: translateX(-50%); }
-        #flecheGauche{ top: 50%; left: 35%; transform: translateY(-50%); }
-        #flecheDroite{ top: 50%; right: 35%; transform: translateY(-50%); }
+        
+        /* Flèche Haut */
+        #flecheHaut {
+            top: 30%; left: 50%;
+            transform: translateX(-50%);
+            border-width: 0 20px 30px 20px;
+            border-color: transparent transparent #ffffff transparent;
+        }
+        /* Flèche Bas */
+        #flecheBas {
+            bottom: 30%; left: 50%;
+            transform: translateX(-50%);
+            border-width: 30px 20px 0 20px;
+            border-color: #ffffff transparent transparent transparent;
+        }
+        /* Flèche Gauche */
+        #flecheGauche {
+            top: 50%; left: 30%;
+            transform: translateY(-50%);
+            border-width: 20px 30px 20px 0;
+            border-color: transparent #ffffff transparent transparent;
+        }
+        /* Flèche Droite */
+        #flecheDroite {
+            top: 50%; right: 30%;
+            transform: translateY(-50%);
+            border-width: 20px 0 20px 30px;
+            border-color: transparent transparent transparent #ffffff;
+        }
+
+        /* Style quand la flèche s'active (passe en jaune vif) */
+        .active {
+            opacity: 1 !important;
+            transform: scale(1.2);
+        }
+        #flecheHaut.active { border-bottom-color: #ffff00 !important; transform: translateX(-50%) scale(1.2); }
+        #flecheBas.active { border-top-color: #ffff00 !important; transform: translateX(-50%) scale(1.2); }
+        #flecheGauche.active { border-right-color: #ffff00 !important; transform: translateY(-50%) scale(1.2); }
+        #flecheDroite.active { border-left-color: #ffff00 !important; transform: translateY(-50%) scale(1.2); }
     </style>
 </head>
 <body>
@@ -52,20 +93,19 @@
 
     <div id="mireCentrale"></div>
 
-    <div id="flecheHaut" class="fleche">▲</div>
-    <div id="flecheBas" class="fleche">▼</div>
-    <div id="flecheGauche" class="fleche">◀</div>
-    <div id="flecheDroite" class="fleche">▶</div>
+    <!-- Divs vides qui servent de triangles graphiques -->
+    <div id="flecheHaut" class="container-fleche"></div>
+    <div id="flecheBas" class="container-fleche"></div>
+    <div id="flecheGauche" class="container-fleche"></div>
+    <div id="flecheDroite" class="container-fleche"></div>
 
     <script>
-        // Coordonnées cibles (Véga)
         const ETOILE_RA = 279.23;  
         const ETOILE_DEC = 38.78;  
 
         let gpsLat = 0, gpsLon = 0, gpsOk = false;
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false;
         
-        // Variables d'ajustement pour l'étalonnage manuel
         let offsetAzimut = 0;
         let offsetHauteur = 0;
 
@@ -107,15 +147,11 @@
             }
         });
 
-        // BOUTON COMPENSATION : Si vous avez Véga dans votre objectif mais que l'iPhone dit le contraire
         btnEtalonner.addEventListener('click', function() {
             if (gpsOk && capteursOk) {
                 const positionTheorique = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-                
-                // On calcule l'écart entre le ciel réel et les capteurs déréglés
                 offsetAzimut = positionTheorique.azimut - iphoneAzimut;
                 offsetHauteur = positionTheorique.hauteur - iphoneHauteur;
-                
                 telemetrie.innerHTML = "Étalonnage réussi !";
             }
         });
@@ -143,24 +179,17 @@
         }
 
         function ecouterOrientation(e) {
-            // Lecture du cap (Azimut)
             if (e.webkitCompassHeading !== undefined) {
                 iphoneAzimut = e.webkitCompassHeading;
             } else {
                 iphoneAzimut = (360 - e.alpha) % 360;
             }
 
-            // REPERE CAMERA ARRIERE IPHONE : 
-            // Quand on pointe la caméra arrière grand-angle vers le ciel, l'axe 'gamma' (inclinaison latérale)
-            // se transforme géométriquement en indicateur de hauteur sous iOS.
             if (Math.abs(e.beta) > 45) {
-                // Si l'iPhone est tenu verticalement ou incliné face au ciel
                 iphoneHauteur = 90 - Math.abs(e.beta);
             } else {
-                // Si l'iPhone est plus à plat
                 iphoneHauteur = Math.abs(e.gamma);
             }
-            
             capteursOk = true;
         }
 
@@ -196,7 +225,6 @@
 
             const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
 
-            // Application des filtres d'étalonnage
             let azimutAjuste = (iphoneAzimut + offsetAzimut + 360) % 360;
             let hauteurAjustee = iphoneHauteur + offsetHauteur;
 
@@ -211,16 +239,3 @@
                 <b>iPhone (Ajusté) :</b> Az ${azimutAjuste.toFixed(1)}° | Ht ${hauteurAjustee.toFixed(1)}°
             `;
 
-            const TOLERANCE = 0.3; 
-
-            if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
-            else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
-            else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
-
-            if (deltaAzimut > TOLERANCE) { fDroite.classList.add('active'); fGauche.classList.remove('active'); }
-            else if (deltaAzimut < -TOLERANCE) { fGauche.classList.add('active'); fDroite.classList.remove('active'); }
-            else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
-
-            requestAnimationFrame(bouclePrincipale);
-        }
-    </script>
