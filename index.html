@@ -5,67 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Astro Guidage - Flèches CSS</title>
     <style>
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: black; font-family: sans-serif;
-        }
-        #videoFlux {
-            position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%;
-            width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover;
-        }
-        #interface {
-            position: relative; z-index: 2; pointer-events: none;
-            color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px;
-        }
-        button {
-            pointer-events: auto; padding: 12px 24px; background-color: #222;
-            color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px;
-        }
-        #btnEtalonner {
-            background-color: #800000; color: #ffcccc; border-color: #ff0000;
-        }
-        #mireCentrale {
-            position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
-            border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
-        }
-
-        /* --- FLÈCHES DESSINÉES EN CSS PUR (SANS ÉMOJIS) --- */
-        .container-fleche {
-            position: absolute;
-            z-index: 4;
-            width: 0;
-            height: 0;
-            border-style: solid;
-            opacity: 0.15;
-            transition: opacity 0.1s, transform 0.1s;
-        }
-        
-        #flecheHaut {
-            top: 30%; left: 50%;
-            transform: translateX(-50%);
-            border-width: 0 20px 30px 20px;
-            border-color: transparent transparent #ffffff transparent;
-        }
-        #flecheBas {
-            bottom: 30%; left: 50%;
-            transform: translateX(-50%);
-            border-width: 30px 20px 0 20px;
-            border-color: #ffffff transparent transparent transparent;
-        }
-        #flecheGauche {
-            top: 50%; left: 30%;
-            transform: translateY(-50%);
-            border-width: 20px 30px 20px 0;
-            border-color: transparent #ffffff transparent transparent;
-        }
-        #flecheDroite {
-            top: 50%; right: 30%;
-            transform: translateY(-50%);
-            border-width: 20px 0 20px 30px;
-            border-color: transparent transparent transparent #ffffff;
-        }
-
-        /* Style quand la flèche passe au jaune vif */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: black; font-family: sans-serif; }
+        #videoFlux { position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover; }
+        #interface { position: relative; z-index: 2; pointer-events: none; color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px; }
+        button { pointer-events: auto; padding: 12px 24px; background-color: #222; color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px; }
+        #btnEtalonner { background-color: #800000; color: #ffcccc; border-color: #ff0000; }
+        #mireCentrale { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%); }
+        .container-fleche { position: absolute; z-index: 4; width: 0; height: 0; border-style: solid; opacity: 0.15; transition: opacity 0.1s, transform 0.1s; }
+        #flecheHaut { top: 30%; left: 50%; transform: translateX(-50%); border-width: 0 20px 30px 20px; border-color: transparent transparent #ffffff transparent; }
+        #flecheBas { bottom: 30%; left: 50%; transform: translateX(-50%); border-width: 30px 20px 0 20px; border-color: #ffffff transparent transparent transparent; }
+        #flecheGauche { top: 50%; left: 30%; transform: translateY(-50%); border-width: 20px 30px 20px 0; border-color: transparent #ffffff transparent transparent; }
+        #flecheDroite { top: 50%; right: 30%; transform: translateY(-50%); border-width: 20px 0 20px 30px; border-color: transparent transparent transparent #ffffff; }
         #flecheHaut.active { border-bottom-color: #ffff00 !important; opacity: 1 !important; transform: translateX(-50%) scale(1.2); }
         #flecheBas.active { border-top-color: #ffff00 !important; opacity: 1 !important; transform: translateX(-50%) scale(1.2); }
         #flecheGauche.active { border-right-color: #ffff00 !important; opacity: 1 !important; transform: translateY(-50%) scale(1.2); }
@@ -91,22 +41,13 @@
     <div id="flecheDroite" class="container-fleche"></div>
 
     <script>
-        const ETOILE_RA = 279.23;  
-        const ETOILE_DEC = 38.78;  
-
-        let gpsLat = 0, gpsLon = 0, gpsOk = false;
-        let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false;
-        
-        let offsetAzimut = 0;
-        let offsetHauteur = 0;
+        const ETOILE_RA = 279.23; const ETOILE_DEC = 38.78;  
+        let gpsLat = 0, gpsLon = 0, gpsOk = false, iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
         const btnDemarrer = document.getElementById('btnDemarrer');
         const btnEtalonner = document.getElementById('btnEtalonner');
         const telemetrie = document.getElementById('telemetrie');
-        const fHaut = document.getElementById('flecheHaut');
-        const fBas = document.getElementById('flecheBas');
-        const fGauche = document.getElementById('flecheGauche');
-        const fDroite = document.getElementById('flecheDroite');
+        const fHaut = document.getElementById('flecheHaut'), fBas = document.getElementById('flecheBas'), fGauche = document.getElementById('flecheGauche'), fDroite = document.getElementById('flecheDroite');
 
         btnDemarrer.addEventListener('click', function() {
             btnDemarrer.style.display = 'none';
@@ -114,73 +55,43 @@
             telemetrie.innerHTML = "Démarrage des modules...";
 
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(perm => {
-                        if (perm === 'granted') {
-                            window.addEventListener('deviceorientation', ecouterOrientation, true);
-                            capteursOk = true;
-                            demarrerCamera();
-                            demarrerGPS();
-                            requestAnimationFrame(bouclePrincipale);
-                        } else {
-                            telemetrie.innerHTML = "Permission capteurs refusée.";
-                        }
-                    })
-                    .catch(err => {
-                        telemetrie.innerHTML = "Erreur : " + err;
-                    });
+                DeviceOrientationEvent.requestPermission().then(perm => {
+                    if (perm === 'granted') {
+                        window.addEventListener('deviceorientation', ecouterOrientation, true);
+                        capteursOk = true; demarrerCamera(); demarrerGPS(); requestAnimationFrame(bouclePrincipale);
+                    } else { telemetrie.innerHTML = "Permission refusée."; }
+                }).catch(err => { telemetrie.innerHTML = "Erreur : " + err; });
             } else {
                 window.addEventListener('deviceorientation', ecouterOrientation, true);
-                capteursOk = true;
-                demarrerCamera();
-                demarrerGPS();
-                requestAnimationFrame(bouclePrincipale);
+                capteursOk = true; demarrerCamera(); demarrerGPS(); requestAnimationFrame(bouclePrincipale);
             }
         });
 
         btnEtalonner.addEventListener('click', function() {
             if (gpsOk && capteursOk) {
-                const positionTheorique = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-                offsetAzimut = positionTheorique.azimut - iphoneAzimut;
-                offsetHauteur = positionTheorique.hauteur - iphoneHauteur;
+                const pos = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+                offsetAzimut = pos.azimut - iphoneAzimut;
+                offsetHauteur = pos.hauteur - iphoneHauteur;
                 telemetrie.innerHTML = "Étalonnage réussi !";
             }
         });
 
         async function demarrerCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: "environment" }, width: 1280, height: 720 },
-                    audio: false
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: 1280, height: 720 }, audio: false });
                 document.getElementById('videoFlux').srcObject = stream;
-            } catch (e) {
-                console.log("Caméra en mode simulation.");
-            }
+            } catch (e) { console.log("Erreur vidéo."); }
         }
 
         function demarrerGPS() {
             if (navigator.geolocation) {
-                navigator.geolocation.watchPosition((pos) => {
-                    gpsLat = pos.coords.latitude;
-                    gpsLon = pos.coords.longitude;
-                    gpsOk = true;
-                }, null, { enableHighAccuracy: true });
+                navigator.geolocation.watchPosition((pos) => { gpsLat = pos.coords.latitude; gpsLon = pos.coords.longitude; gpsOk = true; }, null, { enableHighAccuracy: true });
             }
         }
 
         function ecouterOrientation(e) {
-            if (e.webkitCompassHeading !== undefined) {
-                iphoneAzimut = e.webkitCompassHeading;
-            } else {
-                iphoneAzimut = (360 - e.alpha) % 360;
-            }
-
-            if (Math.abs(e.beta) > 45) {
-                iphoneHauteur = 90 - Math.abs(e.beta);
-            } else {
-                iphoneHauteur = Math.abs(e.gamma);
-            }
+            iphoneAzimut = (e.webkitCompassHeading !== undefined) ? e.webkitCompassHeading : (360 - e.alpha) % 360;
+            iphoneHauteur = (Math.abs(e.beta) > 45) ? (90 - Math.abs(e.beta)) : Math.abs(e.gamma);
             capteursOk = true;
         }
 
@@ -188,49 +99,36 @@
             const maintenant = new Date();
             const julianDate = (maintenant.getTime() / 86400000) + 2440587.5;
             const D = julianDate - 2451545.0;
-
             let tsg = (280.46061837 + 360.98564736629 * D) % 360;
             let tsl = (tsg + lon + 360) % 360;
             let H = (tsl - ra + 360) % 360;
-
-            const rLat = (lat * Math.PI) / 180;
-            const rDec = (dec * Math.PI) / 180;
-            const rH = (H * Math.PI) / 180;
-
+            const rLat = (lat * Math.PI) / 180, rDec = (dec * Math.PI) / 180, rH = (H * Math.PI) / 180;
             const sinH = Math.sin(rDec) * Math.sin(rLat) + Math.cos(rDec) * Math.cos(rLat) * Math.cos(rH);
             const hauteur = Math.asin(sinH) * 180 / Math.PI;
-
             const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
             let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
             if (Math.sin(rH) > 0) azimut = 360 - azimut;
-
             return { hauteur, azimut };
         }
 
         function bouclePrincipale() {
             if (!gpsOk || !capteursOk) {
-                telemetrie.innerHTML = `Signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
-                requestAnimationFrame(bouclePrincipale);
-                return;
+                telemetrie.innerHTML = `Recherche... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
+                requestAnimationFrame(bouclePrincipale); return;
             }
-
             const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+            let azAjuste = (iphoneAzimut + offsetAzimut + 360) % 360, htAjustee = iphoneHauteur + offsetHauteur;
+            let dHt = etoile.hauteur - htAjustee, dAz = etoile.azimut - azAjuste;
+            if (dAz > 180) dAz -= 360; if (dAz < -180) dAz += 360;
 
-            let azimutAjuste = (iphoneAzimut + offsetAzimut + 360) % 360;
-            let hauteurAjustee = iphoneHauteur + offsetHauteur;
-
-            let deltaHauteur = etoile.hauteur - hauteurAjustee;
-            let deltaAzimut = etoile.azimut - azimutAjuste;
-
-            if (deltaAzimut > 180) deltaAzimut -= 360;
-            if (deltaAzimut < -180) deltaAzimut += 360;
-
-            telemetrie.innerHTML = `
-                <b>Étoile (Théorique) :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br>
-                <b>iPhone (Ajusté) :</b> Az ${azimutAjuste.toFixed(1)}° | Ht ${hauteurAjustee.toFixed(1)}°
-            `;
-
-            const TOLERANCE = 0.4; 
-
-            if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
-            else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
+            telemetrie.innerHTML = `<b>Étoile :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br><b>iPhone :</b> Az ${azAjuste.toFixed(1)}° | Ht ${htAjustee.toFixed(1)}°`;
+            
+            const TOL = 0.4;
+            if (dHt > TOL) { fHaut.classList.add('active'); fBas.classList.remove('active'); } else if (dHt < -TOL) { fBas.classList.add('active'); fHaut.classList.remove('active'); } else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
+            if (dAz > TOL) { fDroite.classList.add('active'); fGauche.classList.remove('active'); } else if (dAz < -TOL) { fGauche.classList.add('active'); fDroite.classList.remove('active'); } else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
+            
+            requestAnimationFrame(bouclePrincipale);
+        }
+    </script>
+</body>
+</html>
