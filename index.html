@@ -9,33 +9,27 @@
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden; background-color: black; font-family: sans-serif;
         }
-
         #videoFlux {
             position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%;
             width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover;
         }
-
         #interface {
             position: relative; z-index: 2; pointer-events: none;
             color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px;
         }
-
         button {
             pointer-events: auto; padding: 12px 24px; background-color: #222;
             color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px;
         }
-
         #mireCentrale {
             position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
             border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%);
         }
-
         .fleche {
             position: absolute; z-index: 4; font-size: 40px; color: rgba(255, 255, 255, 0.2);
             transition: color 0.1s, transform 0.1s; text-shadow: 0 0 10px black;
         }
         .active { color: #ffff00; transform: scale(1.2); }
-
         #flecheHaut  { top: 35%; left: 50%; transform: translateX(-50%); }
         #flecheBas   { bottom: 35%; left: 50%; transform: translateX(-50%); }
         #flecheGauche{ top: 50%; left: 35%; transform: translateY(-50%); }
@@ -73,15 +67,36 @@
         const fGauche = document.getElementById('flecheGauche');
         const fDroite = document.getElementById('flecheDroite');
 
-        btnDemarrer.addEventListener('click', async () => {
+        // REGLE D'OR APPLE : On demande l'autorisation des capteurs en TOUTE PRIORITÉ dès le clic !
+        btnDemarrer.addEventListener('click', function() {
             btnDemarrer.style.display = 'none';
             telemetrie.innerHTML = "Démarrage des modules...";
-            
-            await demarrerCamera();
-            demarrerGPS();
-            demarrerCapteurs(); // Correction : Retrait du await qui bloquait le script ici
-            
-            requestAnimationFrame(bouclePrincipale);
+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(perm => {
+                        if (perm === 'granted') {
+                            window.addEventListener('deviceorientation', ecouterOrientation, true);
+                            capteursOk = true;
+                            // Les capteurs sont validés, on peut lancer sereinement le reste
+                            demarrerCamera();
+                            demarrerGPS();
+                            requestAnimationFrame(bouclePrincipale);
+                        } else {
+                            telemetrie.innerHTML = "Permission capteurs refusée par l'iPhone.";
+                        }
+                    })
+                    .catch(err => {
+                        telemetrie.innerHTML = "Erreur d'initialisation : " + err;
+                    });
+            } else {
+                // Fallback hors iPhone
+                window.addEventListener('deviceorientation', ecouterOrientation, true);
+                capteursOk = true;
+                demarrerCamera();
+                demarrerGPS();
+                requestAnimationFrame(bouclePrincipale);
+            }
         });
 
         async function demarrerCamera() {
@@ -92,7 +107,7 @@
                 });
                 document.getElementById('videoFlux').srcObject = stream;
             } catch (e) {
-                telemetrie.innerHTML = "Caméra arrière indisponible. Mode simulation vidéo.";
+                console.log("Caméra arrière indisponible.");
             }
         }
 
@@ -103,49 +118,14 @@
                     gpsLon = pos.coords.longitude;
                     gpsOk = true;
                 }, (err) => {
-                    telemetrie.innerHTML = `Erreur GPS : ${err.message}. Vérifiez vos réglages Réglages > Confidentialité.`;
+                    telemetrie.innerHTML = "Erreur GPS : " + err.message;
                 }, { enableHighAccuracy: true });
-            } else {
-                telemetrie.innerHTML = "Le GPS n'est pas supporté par ce navigateur.";
             }
         }
 
-        function demarrerCapteurs() {
-    // On vérifie si l'iPhone réclame une permission
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        
-        // CORRECTION : On passe "true" pour exiger l'accès à la Boussole (Magnetometer)
-        DeviceOrientationEvent.requestPermission(true) 
-            .then(perm => {
-                if (perm === 'granted') {
-                    // CORRECTION : Sur iOS, pour avoir le Nord stable, on écoute 'deviceorientationabsolute'
-                    window.addEventListener('deviceorientationabsolute', ecouterOrientation, true);
-                    // Sécurité au cas où le mode absolu n'est pas géré
-                    window.addEventListener('deviceorientation', ecouterOrientation, true);
-                } else {
-                    telemetrie.innerHTML = "Permission capteurs refusée.";
-                }
-            })
-            .catch(err => {
-                telemetrie.innerHTML = "Erreur d'initialisation : " + err;
-            });
-    } else {
-        // Pour les autres appareils
-        window.addEventListener('deviceorientationabsolute', ecouterOrientation, true);
-        window.addEventListener('deviceorientation', ecouterOrientation, true);
-    }
-}
-
-
         function ecouterOrientation(e) {
-            // Utilisation de la boussole native Apple en priorité
-            if (e.webkitCompassHeading !== undefined) {
-                iphoneAzimut = e.webkitCompassHeading;
-            } else {
-                iphoneAzimut = (360 - e.alpha) % 360;
-            }
+            iphoneAzimut = e.webkitCompassHeading || (360 - e.alpha);
             iphoneHauteur = e.beta; 
-            capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
@@ -172,9 +152,8 @@
         }
 
         function bouclePrincipale() {
-            // Affichage de l'état d'attente précis si les capteurs tardent à répondre
             if (!gpsOk || !capteursOk) {
-                telemetrie.innerHTML = `Recherche des signaux... <br> GPS : ${gpsOk ? 'OK' : 'En attente'} | Capteurs : ${capteursOk ? 'OK' : 'En attente'}`;
+                telemetrie.innerHTML = `Recherche des signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
                 requestAnimationFrame(bouclePrincipale);
                 return;
             }
@@ -194,12 +173,10 @@
 
             const TOLERANCE = 0.2; 
 
-            // Guidage Vertical
             if (deltaHauteur > TOLERANCE) { fHaut.classList.add('active'); fBas.classList.remove('active'); }
             else if (deltaHauteur < -TOLERANCE) { fBas.classList.add('active'); fHaut.classList.remove('active'); }
             else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
 
-            // Guidage Horizontal (Correction de l'accolade manquante)
             if (deltaAzimut > TOLERANCE) { fDroite.classList.add('active'); fGauche.classList.remove('active'); }
             else if (deltaAzimut < -TOLERANCE) { fGauche.classList.add('active'); fDroite.classList.remove('active'); }
             else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
@@ -209,4 +186,3 @@
     </script>
 </body>
 </html>
-
