@@ -111,23 +111,31 @@
         }
 
         function demarrerCapteurs() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(perm => {
-                        if (perm === 'granted') {
-                            window.addEventListener('deviceorientation', ecouterOrientation);
-                        } else {
-                            telemetrie.innerHTML = "Permission capteurs refusée par l'utilisateur.";
-                        }
-                    })
-                    .catch(err => {
-                        telemetrie.innerHTML = "Erreur d'initialisation des capteurs : " + err;
-                    });
-            } else {
-                // Pour les navigateurs de bureau ou Android
-                window.addEventListener('deviceorientation', ecouterOrientation);
-            }
-        }
+    // On vérifie si l'iPhone réclame une permission
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        
+        // CORRECTION : On passe "true" pour exiger l'accès à la Boussole (Magnetometer)
+        DeviceOrientationEvent.requestPermission(true) 
+            .then(perm => {
+                if (perm === 'granted') {
+                    // CORRECTION : Sur iOS, pour avoir le Nord stable, on écoute 'deviceorientationabsolute'
+                    window.addEventListener('deviceorientationabsolute', ecouterOrientation, true);
+                    // Sécurité au cas où le mode absolu n'est pas géré
+                    window.addEventListener('deviceorientation', ecouterOrientation, true);
+                } else {
+                    telemetrie.innerHTML = "Permission capteurs refusée.";
+                }
+            })
+            .catch(err => {
+                telemetrie.innerHTML = "Erreur d'initialisation : " + err;
+            });
+    } else {
+        // Pour les autres appareils
+        window.addEventListener('deviceorientationabsolute', ecouterOrientation, true);
+        window.addEventListener('deviceorientation', ecouterOrientation, true);
+    }
+}
+
 
         function ecouterOrientation(e) {
             // Utilisation de la boussole native Apple en priorité
