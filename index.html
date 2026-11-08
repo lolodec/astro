@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Astro Guidage Pro Corrigé</title>
+    <title>Astro Guidage Pro</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: black; font-family: sans-serif; }
         #videoFlux { position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; z-index: 1; transform: translate(-50%, -50%); object-fit: cover; }
         #interface { position: relative; z-index: 2; pointer-events: none; color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px; }
         button { pointer-events: auto; padding: 12px 24px; background-color: #222; color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px; }
         #btnEtalonner { background-color: #800000; color: #ffcccc; border-color: #ff0000; }
-        
         #mireCentrale { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%); transition: border-color 0.2s; }
         #mireCentrale.cible-atteinte { border-color: #00ff00 !important; box-shadow: 0 0 8px #00ff00; }
-
         .container-fleche { position: absolute; z-index: 4; width: 0; height: 0; border-style: solid; opacity: 0.15; transition: opacity 0.1s, transform 0.1s; }
         #flecheHaut { top: 30%; left: 50%; transform: translateX(-50%); border-width: 0 20px 30px 20px; border-color: transparent transparent #ffffff transparent; }
         #flecheBas { bottom: 30%; left: 50%; transform: translateX(-50%); border-width: 30px 20px 0 20px; border-color: #ffffff transparent transparent transparent; }
@@ -47,7 +45,7 @@
         const ETOILE_RA = 0.0; 
         const ETOILE_DEC = 90.0;  
 
-        let gpsLat = 46.3433, gpsLon = -0.4559, gpsOk = false; // Valeurs par défaut (Niort Cholette)
+        let gpsLat = 46.3433, gpsLon = -0.4559, gpsOk = false; 
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
         const btnDemarrer = document.getElementById('btnDemarrer');
@@ -59,15 +57,18 @@
         btnDemarrer.addEventListener('click', function() {
             btnDemarrer.style.display = 'none';
             btnEtalonner.style.display = 'inline-block';
-            telemetrie.innerHTML = "Démarrage des modules...";
+            telemetrie.innerHTML = "Demande d'accès aux capteurs...";
 
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().then(perm => {
                     if (perm === 'granted') {
                         window.addEventListener('deviceorientation', ecouterOrientation, true);
-                        capteursOk = true; demarrerCamera(); demarrerGPS(); requestAnimationFrame(bouclePrincipale);
-                    } else { telemetrie.innerHTML = "Permission refusée."; }
-                }).catch(err => { telemetrie.innerHTML = "Erreur : " + err; });
+                        capteursOk = true; 
+                        demarrerCamera(); 
+                        demarrerGPS(); 
+                        requestAnimationFrame(bouclePrincipale);
+                    } else { telemetrie.innerHTML = "Permission capteurs refusée par iOS."; }
+                }).catch(err => { telemetrie.innerHTML = "Erreur d'autorisation : " + err; });
             } else {
                 window.addEventListener('deviceorientation', ecouterOrientation, true);
                 capteursOk = true; demarrerCamera(); demarrerGPS(); requestAnimationFrame(bouclePrincipale);
@@ -87,7 +88,7 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: 1280, height: 720 }, audio: false });
                 document.getElementById('videoFlux').srcObject = stream;
-            } catch (e) { console.log("Erreur vidéo."); }
+            } catch (e) { telemetrie.innerHTML += "<br>Erreur Caméra (Vérifier accès HTTPS)"; }
         }
 
         function demarrerGPS() {
@@ -96,78 +97,62 @@
                     gpsLat = pos.coords.latitude; 
                     gpsLon = pos.coords.longitude; 
                     gpsOk = true; 
-                }, null, { enableHighAccuracy: true });
+                }, () => { console.log("GPS restreint"); }, { enableHighAccuracy: true });
             }
         }
 
         function ecouterOrientation(e) {
-            // 1. Détermination de l'azimut avec secours trigonométrique 3D si inclinaison forte
             let heading = e.webkitCompassHeading;
-            
             if (heading === undefined) {
-                // Modèle de secours mathématique si la boussole pure décroche à cause de l'inclinaison
                 let alphaRad = e.alpha * Math.PI / 180;
                 let betaRad = e.beta * Math.PI / 180;
                 let gammaRad = e.gamma * Math.PI / 180;
-
                 let y = -Math.sin(alphaRad) * Math.cos(gammaRad) - Math.cos(alphaRad) * Math.sin(betaRad) * Math.sin(gammaRad);
                 let x = -Math.cos(alphaRad) * Math.cos(gammaRad) + Math.sin(alphaRad) * Math.sin(betaRad) * Math.sin(gammaRad);
-
                 heading = Math.atan2(y, x) * 180 / Math.PI;
                 if (heading < 0) heading += 360;
             }
-
-            // 2. Correction de la déclinaison magnétique pour obtenir le Nord Géographique (Vrai)
-            // Estimation locale automatique pour la France de l'ouest (env. +2.1 degrés de déviation en 2026)
-            let declinaisonCorrection = 2.1; 
-            iphoneAzimut = (heading + declinaisonCorrection) % 360;
-
-            // 3. Hauteur angulaire (L'objectif pointe vers le ciel lorsque le dos du téléphone s'incline)
+            iphoneAzimut = heading % 360;
             iphoneHauteur = e.beta - 90;
-            
             capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
+            if (Math.abs(dec - 90.0) < 0.001) {
+                return { azimut: 0.0, hauteur: lat };
+            }
             const m = new Date();
             const UTC_heures = m.getUTCHours() + m.getUTCMinutes()/60 + m.getUTCSeconds()/3600;
-            
-            const annee = m.getUTCFullYear();
-            const mois = m.getUTCMonth() + 1;
-            const jour = m.getUTCDate();
-            
-            let A = Math.floor(annee / 100);
-            let B = 2 - A + Math.floor(A / 4);
+            const annee = m.getUTCFullYear(); const mois = m.getUTCMonth() + 1; const jour = m.getUTCDate();
+            let A = Math.floor(annee / 100); let B = 2 - A + Math.floor(A / 4);
             let jd = Math.floor(365.25 * (annee + 4716)) + Math.floor(30.6001 * (mois + 1)) + jour + B - 1524.5 + (UTC_heures/24);
             const D = jd - 2451545.0;
-
             let tsg = (100.46061837 + 360.98564736629 * D) % 360;
             let tsl = (tsg + lon + 360) % 360;
             let H = (tsl - ra + 360) % 360;
-
             const rLat = (lat * Math.PI) / 180, rDec = (dec * Math.PI) / 180, rH = (H * Math.PI) / 180;
             const sinH = Math.sin(rDec) * Math.sin(rLat) + Math.cos(rDec) * Math.cos(rLat) * Math.cos(rH);
             const hauteur = Math.asin(sinH) * 180 / Math.PI;
-            
             const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
             let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
-            
             if (Math.sin(rH) > 0) { azimut = 360 - azimut; }
-            
             return { azimut: azimut, hauteur: hauteur };
         }
 
         function bouclePrincipale() {
             if (capteursOk) {
                 const cible = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-                
                 let azimutVirtuel = (iphoneAzimut + offsetAzimut + 360) % 360;
                 let hauteurVirtuelle = iphoneHauteur + offsetHauteur;
-                
                 let diffAz = cible.azimut - azimutVirtuel;
-                if (diffAz > 180) diffAz -= 360;
-                if (diffAz < -180) diffAz += 360;
+                if (diffAz > 180) diffAz -= 360; if (diffAz < -180) diffAz += 360;
                 let diffHaut = cible.hauteur - hauteurVirtuelle;
 
                 telemetrie.innerHTML = `GPS: ${gpsOk ? 'Ok' : 'Défaut Niort'} | Capteurs: Ok<br>
                                        Cible -> Az: ${cible.azimut.toFixed(1)}° / Ht: ${cible.hauteur.toFixed(1)}°<br>
+                                       Écart -> ΔAz: ${diffAz.toFixed(1)}° / ΔHt: ${diffHaut.toFixed(1)}°`;
+
+                const SEUIL = 1.0; 
+                if (diffHaut > SEUIL) fHaut.classList.add('active'); else fHaut.classList.remove('active');
+                if (diffHaut < -SEUIL) fBas.classList.add('active'); else fBas.classList.remove('active');
+                if (diffAz > SEUIL) fDroite.classList.add('active'); else fDroite.classList.remove('active');
