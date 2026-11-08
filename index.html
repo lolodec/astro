@@ -24,27 +24,20 @@
     </style>
 </head>
 <body>
-
     <video id="videoFlux" autoplay playsinline muted></video>
-
     <div id="interface">
         <h2>Guidage Astro Clara</h2>
         <button id="btnDemarrer">1. Activer l'application</button>
         <button id="btnEtalonner" style="display:none;">2. Viser le Pôle Nord & Étalonner</button>
         <div id="telemetrie">En attente de l'activation...</div>
     </div>
-
     <div id="mireCentrale"></div>
-
     <div id="flecheHaut" class="container-fleche"></div>
     <div id="flecheBas" class="container-fleche"></div>
     <div id="flecheGauche" class="container-fleche"></div>
     <div id="flecheDroite" class="container-fleche"></div>
-
     <script>
-        const ETOILE_RA = 0.0; 
-        const ETOILE_DEC = 90.0;  
-
+        const ETOILE_RA = 0.0; const ETOILE_DEC = 90.0;  
         let gpsLat = 46.3433, gpsLon = -0.4559, gpsOk = false; 
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
@@ -54,25 +47,20 @@
         const mireCentrale = document.getElementById('mireCentrale');
         const fHaut = document.getElementById('flecheHaut'), fBas = document.getElementById('flecheBas'), fGauche = document.getElementById('flecheGauche'), fDroite = document.getElementById('flecheDroite');
 
-        btnDemarrer.addEventListener('click', function() {
+        btnDemarrer.addEventListener('click', async function() {
+            telemetrie.innerHTML = "Demande des capteurs...";
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const perm = await DeviceOrientationEvent.requestPermission();
+                    if (perm === 'granted') { window.addEventListener('deviceorientation', ecouterOrientation, true); capteursOk = true; }
+                    else { telemetrie.innerHTML = "Permission refusée."; return; }
+                } catch (err) { telemetrie.innerHTML = "Erreur : " + err; return; }
+            } else { window.addEventListener('deviceorientation', ecouterOrientation, true); capteursOk = true; }
+
             btnDemarrer.style.display = 'none';
             btnEtalonner.style.display = 'inline-block';
-            telemetrie.innerHTML = "Demande d'accès aux capteurs...";
-
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(perm => {
-                    if (perm === 'granted') {
-                        window.addEventListener('deviceorientation', ecouterOrientation, true);
-                        capteursOk = true; 
-                        demarrerCamera(); 
-                        demarrerGPS(); 
-                        requestAnimationFrame(bouclePrincipale);
-                    } else { telemetrie.innerHTML = "Permission capteurs refusée par iOS."; }
-                }).catch(err => { telemetrie.innerHTML = "Erreur d'autorisation : " + err; });
-            } else {
-                window.addEventListener('deviceorientation', ecouterOrientation, true);
-                capteursOk = true; demarrerCamera(); demarrerGPS(); requestAnimationFrame(bouclePrincipale);
-            }
+            telemetrie.innerHTML = "Capteurs OK. Vidéo et GPS...";
+            demarrerGPS(); demarrerCamera(); requestAnimationFrame(bouclePrincipale);
         });
 
         btnEtalonner.addEventListener('click', function() {
@@ -86,55 +74,46 @@
 
         async function demarrerCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" }, width: 1280, height: 720 }, audio: false });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
                 document.getElementById('videoFlux').srcObject = stream;
-            } catch (e) { telemetrie.innerHTML += "<br>Erreur Caméra (Vérifier accès HTTPS)"; }
+            } catch (e) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    document.getElementById('videoFlux').srcObject = stream;
+                } catch(err) { telemetrie.innerHTML += "<br>(Vidéo indisponible)"; }
+            }
         }
 
         function demarrerGPS() {
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition((pos) => { 
-                    gpsLat = pos.coords.latitude; 
-                    gpsLon = pos.coords.longitude; 
-                    gpsOk = true; 
-                }, () => { console.log("GPS restreint"); }, { enableHighAccuracy: true });
+                    gpsLat = pos.coords.latitude; gpsLon = pos.coords.longitude; gpsOk = true; 
+                }, null, { enableHighAccuracy: true });
             }
         }
 
         function ecouterOrientation(e) {
             let heading = e.webkitCompassHeading;
             if (heading === undefined) {
-                let alphaRad = e.alpha * Math.PI / 180;
-                let betaRad = e.beta * Math.PI / 180;
-                let gammaRad = e.gamma * Math.PI / 180;
+                let alphaRad = e.alpha * Math.PI / 180, betaRad = e.beta * Math.PI / 180, gammaRad = e.gamma * Math.PI / 180;
                 let y = -Math.sin(alphaRad) * Math.cos(gammaRad) - Math.cos(alphaRad) * Math.sin(betaRad) * Math.sin(gammaRad);
                 let x = -Math.cos(alphaRad) * Math.cos(gammaRad) + Math.sin(alphaRad) * Math.sin(betaRad) * Math.sin(gammaRad);
-                heading = Math.atan2(y, x) * 180 / Math.PI;
-                if (heading < 0) heading += 360;
+                heading = Math.atan2(y, x) * 180 / Math.PI; if (heading < 0) heading += 360;
             }
-            iphoneAzimut = heading % 360;
-            iphoneHauteur = e.beta - 90;
-            capteursOk = true;
+            iphoneAzimut = heading % 360; iphoneHauteur = e.beta - 90; capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
-            if (Math.abs(dec - 90.0) < 0.001) {
-                return { azimut: 0.0, hauteur: lat };
-            }
+            if (Math.abs(dec - 90.0) < 0.001) { return { azimut: 0.0, hauteur: lat }; }
             const m = new Date();
             const UTC_heures = m.getUTCHours() + m.getUTCMinutes()/60 + m.getUTCSeconds()/3600;
-            const annee = m.getUTCFullYear(); const mois = m.getUTCMonth() + 1; const jour = m.getUTCDate();
-            let A = Math.floor(annee / 100); let B = 2 - A + Math.floor(A / 4);
-            let jd = Math.floor(365.25 * (annee + 4716)) + Math.floor(30.6001 * (mois + 1)) + jour + B - 1524.5 + (UTC_heures/24);
-            const D = jd - 2451545.0;
-            let tsg = (100.46061837 + 360.98564736629 * D) % 360;
-            let tsl = (tsg + lon + 360) % 360;
+            let jd = Math.floor(365.25 * (m.getUTCFullYear() + 4716)) + Math.floor(30.6001 * (m.getUTCMonth() + 2)) + m.getUTCDate() - 1524.5 + (UTC_heures/24);
+            let tsl = ((100.46061837 + 360.98564736629 * (jd - 2451545.0)) + lon + 360) % 360;
             let H = (tsl - ra + 360) % 360;
             const rLat = (lat * Math.PI) / 180, rDec = (dec * Math.PI) / 180, rH = (H * Math.PI) / 180;
             const sinH = Math.sin(rDec) * Math.sin(rLat) + Math.cos(rDec) * Math.cos(rLat) * Math.cos(rH);
             const hauteur = Math.asin(sinH) * 180 / Math.PI;
-            const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
-            let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
+            let azimut = Math.acos((Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)))) * 180 / Math.PI;
             if (Math.sin(rH) > 0) { azimut = 360 - azimut; }
             return { azimut: azimut, hauteur: hauteur };
         }
@@ -142,17 +121,25 @@
         function bouclePrincipale() {
             if (capteursOk) {
                 const cible = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-                let azimutVirtuel = (iphoneAzimut + offsetAzimut + 360) % 360;
-                let hauteurVirtuelle = iphoneHauteur + offsetHauteur;
-                let diffAz = cible.azimut - azimutVirtuel;
+                let diffAz = cible.azimut - ((iphoneAzimut + offsetAzimut + 360) % 360);
                 if (diffAz > 180) diffAz -= 360; if (diffAz < -180) diffAz += 360;
-                let diffHaut = cible.hauteur - hauteurVirtuelle;
+                let diffHaut = cible.hauteur - (iphoneHauteur + offsetHauteur);
 
-                telemetrie.innerHTML = `GPS: ${gpsOk ? 'Ok' : 'Défaut Niort'} | Capteurs: Ok<br>
+                telemetrie.innerHTML = `GPS: ${gpsOk ? 'Ok' : 'Niort'} | Capteurs: OK<br>
                                        Cible -> Az: ${cible.azimut.toFixed(1)}° / Ht: ${cible.hauteur.toFixed(1)}°<br>
                                        Écart -> ΔAz: ${diffAz.toFixed(1)}° / ΔHt: ${diffHaut.toFixed(1)}°`;
 
-                const SEUIL = 1.0; 
+                const SEUIL = 1.0;
                 if (diffHaut > SEUIL) fHaut.classList.add('active'); else fHaut.classList.remove('active');
                 if (diffHaut < -SEUIL) fBas.classList.add('active'); else fBas.classList.remove('active');
                 if (diffAz > SEUIL) fDroite.classList.add('active'); else fDroite.classList.remove('active');
+                if (diffAz < -SEUIL) fGauche.classList.add('active'); else fGauche.classList.remove('active');
+
+                if (Math.abs(diffHaut) <= SEUIL && Math.abs(diffAz) <= SEUIL) { mireCentrale.classList.add('cible-atteinte'); }
+                else { mireCentrale.classList.remove('cible-atteinte'); }
+            }
+            requestAnimationFrame(bouclePrincipale);
+        }
+    </script>
+</body>
+</html>
