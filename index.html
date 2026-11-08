@@ -47,7 +47,7 @@
         const ETOILE_RA = 0.0; 
         const ETOILE_DEC = 90.0;  
 
-        let gpsLat = 46.3433, gpsLon = -0.4559, gpsOk = false; 
+        let gpsLat = 46.3433, gpsLon = -0.4559, gpsOk = false; // Valeurs par défaut (Niort Cholette)
         let iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
         const btnDemarrer = document.getElementById('btnDemarrer');
@@ -101,9 +101,11 @@
         }
 
         function ecouterOrientation(e) {
+            // 1. Détermination de l'azimut avec secours trigonométrique 3D si inclinaison forte
             let heading = e.webkitCompassHeading;
             
             if (heading === undefined) {
+                // Modèle de secours mathématique si la boussole pure décroche à cause de l'inclinaison
                 let alphaRad = e.alpha * Math.PI / 180;
                 let betaRad = e.beta * Math.PI / 180;
                 let gammaRad = e.gamma * Math.PI / 180;
@@ -115,20 +117,18 @@
                 if (heading < 0) heading += 360;
             }
 
+            // 2. Correction de la déclinaison magnétique pour obtenir le Nord Géographique (Vrai)
+            // Estimation locale automatique pour la France de l'ouest (env. +2.1 degrés de déviation en 2026)
             let declinaisonCorrection = 2.1; 
             iphoneAzimut = (heading + declinaisonCorrection) % 360;
+
+            // 3. Hauteur angulaire (L'objectif pointe vers le ciel lorsque le dos du téléphone s'incline)
             iphoneHauteur = e.beta - 90;
             
             capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
-            // CORRECTION CRITIQUE : Si on vise le Pôle Nord Céleste pur (Dec = 90)
-            // On évite les calculs trigonométriques qui s'annulent et créent des sauts d'azimut.
-            if (Math.abs(dec - 90.0) < 0.001) {
-                return { azimut: 0.0, hauteur: lat };
-            }
-
             const m = new Date();
             const UTC_heures = m.getUTCHours() + m.getUTCMinutes()/60 + m.getUTCSeconds()/3600;
             
@@ -171,8 +171,3 @@
 
                 telemetrie.innerHTML = `GPS: ${gpsOk ? 'Ok' : 'Défaut Niort'} | Capteurs: Ok<br>
                                        Cible -> Az: ${cible.azimut.toFixed(1)}° / Ht: ${cible.hauteur.toFixed(1)}°<br>
-                                       Écart -> ΔAz: ${diffAz.toFixed(1)}° / ΔHt: ${diffHaut.toFixed(1)}°`;
-
-                const SEUIL = 1.0; 
-                
-                if (diffHaut > SEUIL) fHaut.classList.add('active'); else fHaut.classList.remove('active');
