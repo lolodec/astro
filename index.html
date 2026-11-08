@@ -29,7 +29,7 @@
     <div id="interface">
         <h2>Guidage Astro Clara</h2>
         <button id="btnDemarrer">1. Activer l'application</button>
-        <button id="btnEtalonner" style="display:none;">2. Centrer sur Véga & Étalonner</button>
+        <button id="btnEtalonner" style="display:none;">2. Visiser le Pôle Nord & Étalonner</button>
         <div id="telemetrie">En attente de l'activation...</div>
     </div>
 
@@ -41,8 +41,11 @@
     <div id="flecheDroite" class="container-fleche"></div>
 
     <script>
-        // Coordonnées de Véga
-        const ETOILE_RA = 279.23; const ETOILE_DEC = 38.78;  
+        // Coordonnées de la cible (Par défaut : Pôle Nord Céleste / Polaris)
+        // Vous pouvez modifier ces valeurs à tout moment pour changer de cible astro
+        const ETOILE_RA = 0.0; 
+        const ETOILE_DEC = 90.0;  
+
         let gpsLat = 0, gpsLon = 0, gpsOk = false, iphoneAzimut = 0, iphoneHauteur = 0, capteursOk = false, offsetAzimut = 0, offsetHauteur = 0;
 
         const btnDemarrer = document.getElementById('btnDemarrer');
@@ -71,7 +74,6 @@
         btnEtalonner.addEventListener('click', function() {
             if (gpsOk && capteursOk) {
                 const pos = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-                // On fige l'écart angulaire au moment précis de la validation manuelle
                 offsetAzimut = pos.azimut - iphoneAzimut;
                 offsetHauteur = pos.hauteur - iphoneHauteur;
                 telemetrie.innerHTML = "Étalonnage mémorisé !";
@@ -96,21 +98,15 @@
         }
 
         function ecouterOrientation(e) {
-            // Lecture robuste du cap iOS
             iphoneAzimut = (e.webkitCompassHeading !== undefined) ? e.webkitCompassHeading : (360 - e.alpha) % 360;
-            
-            // Correction géométrique caméra arrière iPhone 13 pointée vers le haut
             iphoneHauteur = e.beta - 90;
-            
             capteursOk = true;
         }
 
         function calculerPositionEtoile(lat, lon, ra, dec) {
             const m = new Date();
-            // CORRECTION CRITIQUE : Calcul basé strictement sur le temps universel coordonné (UTC)
             const UTC_heures = m.getUTCHours() + m.getUTCMinutes()/60 + m.getUTCSeconds()/3600;
             
-            // Calcul du jour Julien simplifié
             const annee = m.getUTCFullYear();
             const mois = m.getUTCMonth() + 1;
             const jour = m.getUTCDate();
@@ -120,7 +116,6 @@
             let jd = Math.floor(365.25 * (annee + 4716)) + Math.floor(30.6001 * (mois + 1)) + jour + B - 1524.5 + (UTC_heures/24);
             const D = jd - 2451545.0;
 
-            // Calcul précis de la rotation terrestre (Temps Sidéral Local)
             let tsg = (100.46061837 + 360.98564736629 * D) % 360;
             let tsl = (tsg + lon + 360) % 360;
             let H = (tsl - ra + 360) % 360;
@@ -131,32 +126,34 @@
             
             const cosAz = (Math.sin(rDec) - Math.sin(rLat) * sinH) / (Math.cos(rLat) * Math.cos(Math.asin(sinH)));
             let azimut = Math.acos(Math.max(-1, Math.min(1, cosAz))) * 180 / Math.PI;
-            if (Math.sin(rH) > 0) azimut = 360 - azimut;
             
-            return { hauteur, azimut };
+            if (Math.sin(rH) > 0) { azimut = 360 - azimut; }
+            
+            return { azimut: azimut, hauteur: hauteur };
         }
 
         function bouclePrincipale() {
-            if (!gpsOk || !capteursOk) {
-                telemetrie.innerHTML = `Signaux... <br> GPS : ${gpsOk ? 'OK' : 'Attente'} | Capteurs : ${capteursOk ? 'OK' : 'Attente'}`;
-                requestAnimationFrame(bouclePrincipale); return;
+            if (gpsOk && capteursOk) {
+                const cible = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
+                
+                let azimutVirtuel = (iphoneAzimut + offsetAzimut + 360) % 360;
+                let hauteurVirtuelle = iphoneHauteur + offsetHauteur;
+                
+                let diffAz = cible.azimut - azimutVirtuel;
+                if (diffAz > 180) diffAz -= 360;
+                if (diffAz < -180) diffAz += 360;
+                let diffHaut = cible.hauteur - hauteurVirtuelle;
+
+                telemetrie.innerHTML = `GPS: Ok | Capteurs: Ok<br>
+                                       Cible -> Az: ${cible.azimut.toFixed(1)}° / Ht: ${cible.hauteur.toFixed(1)}°<br>
+                                       Écart -> ΔAz: ${diffAz.toFixed(1)}° / ΔHt: ${diffHaut.toFixed(1)}°`;
+
+                const SEUIL = 1.5;
+                if (diffHaut > SEUIL) fHaut.classList.add('active'); else fHaut.classList.remove('active');
+                if (diffHaut < -SEUIL) fBas.classList.add('active'); else fBas.classList.remove('active');
+                if (diffAz > SEUIL) fDroite.classList.add('active'); else fDroite.classList.remove('active');
+                if (diffAz < -SEUIL) fGauche.classList.add('active'); else fGauche.classList.remove('active');
             }
-            const etoile = calculerPositionEtoile(gpsLat, gpsLon, ETOILE_RA, ETOILE_DEC);
-            
-            // Correction dynamique avec les valeurs étalonnées
-            let azAjuste = (iphoneAzimut + offsetAzimut + 360) % 360;
-            let htAjustee = iphoneHauteur + offsetHauteur;
-
-            let dHt = etoile.hauteur - htAjustee;
-            let dAz = etoile.azimut - azAjuste;
-            if (dAz > 180) dAz -= 360; if (dAz < -180) dAz += 360;
-
-            telemetrie.innerHTML = `<b>Cible :</b> Az ${etoile.azimut.toFixed(1)}° | Ht ${etoile.hauteur.toFixed(1)}°<br><b>iPhone :</b> Az ${azAjuste.toFixed(1)}° | Ht ${htAjustee.toFixed(1)}°`;
-            
-            const TOL = 0.5;
-            if (dHt > TOL) { fHaut.classList.add('active'); fBas.classList.remove('active'); } else if (dHt < -TOL) { fBas.classList.add('active'); fHaut.classList.remove('active'); } else { fHaut.classList.remove('active'); fBas.classList.remove('active'); }
-            if (dAz > TOL) { fDroite.classList.add('active'); fGauche.classList.remove('active'); } else if (dAz < -TOL) { fGauche.classList.add('active'); fDroite.classList.remove('active'); } else { fGauche.classList.remove('active'); fDroite.classList.remove('active'); }
-            
             requestAnimationFrame(bouclePrincipale);
         }
     </script>
