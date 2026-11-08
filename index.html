@@ -10,7 +10,12 @@
         #interface { position: relative; z-index: 2; pointer-events: none; color: #00ff00; text-shadow: 1px 1px 2px black; padding: 15px; font-size: 14px; }
         button { pointer-events: auto; padding: 12px 24px; background-color: #222; color: #00ff00; border: 2px solid #00ff00; border-radius: 5px; font-size: 16px; margin: 5px; }
         #btnEtalonner { background-color: #800000; color: #ffcccc; border-color: #ff0000; }
-        #mireCentrale { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%); }
+        
+        /* Mire centrale : 14px de diamètre */
+        #mireCentrale { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid #ff0000; border-radius: 50%; z-index: 3; transform: translate(-50%, -50%); transition: border-color 0.2s; }
+        /* Classe pour passer la mire au vert */
+        #mireCentrale.cible-atteinte { border-color: #00ff00 !important; box-shadow: 0 0 8px #00ff00; }
+
         .container-fleche { position: absolute; z-index: 4; width: 0; height: 0; border-style: solid; opacity: 0.15; transition: opacity 0.1s, transform 0.1s; }
         #flecheHaut { top: 30%; left: 50%; transform: translateX(-50%); border-width: 0 20px 30px 20px; border-color: transparent transparent #ffffff transparent; }
         #flecheBas { bottom: 30%; left: 50%; transform: translateX(-50%); border-width: 30px 20px 0 20px; border-color: #ffffff transparent transparent transparent; }
@@ -29,7 +34,7 @@
     <div id="interface">
         <h2>Guidage Astro Clara</h2>
         <button id="btnDemarrer">1. Activer l'application</button>
-        <button id="btnEtalonner" style="display:none;">2. Visiser le Pôle Nord & Étalonner</button>
+        <button id="btnEtalonner" style="display:none;">2. Viser le Pôle Nord & Étalonner</button>
         <div id="telemetrie">En attente de l'activation...</div>
     </div>
 
@@ -41,8 +46,7 @@
     <div id="flecheDroite" class="container-fleche"></div>
 
     <script>
-        // Coordonnées de la cible (Par défaut : Pôle Nord Céleste / Polaris)
-        // Vous pouvez modifier ces valeurs à tout moment pour changer de cible astro
+        // Coordonnées de la cible (Par défaut : Pôle Nord Céleste)
         const ETOILE_RA = 0.0; 
         const ETOILE_DEC = 90.0;  
 
@@ -51,6 +55,7 @@
         const btnDemarrer = document.getElementById('btnDemarrer');
         const btnEtalonner = document.getElementById('btnEtalonner');
         const telemetrie = document.getElementById('telemetrie');
+        const mireCentrale = document.getElementById('mireCentrale');
         const fHaut = document.getElementById('flecheHaut'), fBas = document.getElementById('flecheBas'), fGauche = document.getElementById('flecheGauche'), fDroite = document.getElementById('flecheDroite');
 
         btnDemarrer.addEventListener('click', function() {
@@ -148,14 +153,21 @@
                                        Cible -> Az: ${cible.azimut.toFixed(1)}° / Ht: ${cible.hauteur.toFixed(1)}°<br>
                                        Écart -> ΔAz: ${diffAz.toFixed(1)}° / ΔHt: ${diffHaut.toFixed(1)}°`;
 
-                const SEUIL = 1.5;
+                // SEUIL MODIFIÉ : Précision accrue à moins de 1.0 degré
+                const SEUIL = 1.0; 
+                
+                // Activation des flèches directionnelles
                 if (diffHaut > SEUIL) fHaut.classList.add('active'); else fHaut.classList.remove('active');
                 if (diffHaut < -SEUIL) fBas.classList.add('active'); else fBas.classList.remove('active');
                 if (diffAz > SEUIL) fDroite.classList.add('active'); else fDroite.classList.remove('active');
                 if (diffAz < -SEUIL) fGauche.classList.add('active'); else fGauche.classList.remove('active');
+
+                // Changement de couleur de la mire (Rouge -> Vert si l'écart est < 1°)
+                if (Math.abs(diffHaut) <= SEUIL && Math.abs(diffAz) <= SEUIL) {
+                    mireCentrale.classList.add('cible-atteinte');
+                } else {
+                    mireCentrale.classList.remove('cible-atteinte');
+                }
             }
             requestAnimationFrame(bouclePrincipale);
         }
-    </script>
-</body>
-</html>
